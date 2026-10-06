@@ -12,7 +12,7 @@ import ModelCheckChart from '../components/charts/ModelCheckChart.jsx'
 import { useAuth } from '../hooks/useAuth.js'
 import { useSettings } from '../hooks/useSettings.js'
 import { useData } from '../hooks/useData.js'
-import { getRun, listRuns } from '../services/dataService.js'
+import { getRun, listObservations, listRuns } from '../services/dataService.js'
 import {
   histogram,
   movingAverage,
@@ -42,8 +42,19 @@ export default function Analytics() {
     useData(
       async (signal) => {
         if (!latestId) return null
-        const raw = await getRun(latestId, { demoMode: settings.demo, token, signal })
-        return normalizeRun(raw)
+        const [runRaw, observations] = await Promise.all([
+          getRun(latestId, { demoMode: settings.demo, token, signal }),
+          listObservations({ demoMode: settings.demo, token, signal }),
+        ])
+        const normalized = normalizeRun(runRaw)
+        if (normalized) {
+          normalized.history = observations
+          if (observations.length) {
+            normalized.historyStart = normalized.historyStart || observations[0].date
+            normalized.historyEnd = normalized.historyEnd || observations[observations.length - 1].date
+          }
+        }
+        return normalized
       },
       `run:${latestId ?? 'none'}:${source}`,
     )

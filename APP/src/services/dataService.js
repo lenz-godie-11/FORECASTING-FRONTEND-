@@ -31,3 +31,15 @@ export function createObservation(payload, { demoMode, token, signal } = {}) {
   if (demoMode) return demo.createObservation(payload)
   return apiFetch('/api/v1/obs/', { method: 'POST', body: payload, token, signal })
 }
+
+/** Retrieve all logged patient-demand observations. */
+export function listObservations({ demoMode, token, signal } = {}) {
+  if (demoMode) return demo.getRun('demo-run-latest').then((run) => run.history ?? [])
+  return apiFetch('/api/v1/obs/', { token, signal }).then((payload) => {
+    if (!payload || !Array.isArray(payload.data)) return []
+    return payload.data.map((point) => ({
+      date: String(point.date ?? '').slice(0, 10),
+      patients: Number(point.patients ?? 0),
+    }))
+  })
+}

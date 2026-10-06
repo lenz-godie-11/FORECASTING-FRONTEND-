@@ -17,16 +17,6 @@
  */
 
 const RUN_LIST_KEYS = ['results', 'runs', 'data', 'items']
-const HISTORY_KEYS = ['history', 'history_data', 'observations', 'observed', 'obs', 'past', 'actuals', 'historical']
-const PREDICTION_KEYS = [
-  'predictions',
-  'forecast',
-  'daily_predictions',
-  'forecast_values',
-  'future',
-  'predicted',
-  'values',
-]
 const DATE_KEYS = ['date', 'day', 'datetime', 'timestamp']
 const VALUE_KEYS = ['patients', 'patient_count', 'value', 'y', 'count', 'demand', 'predicted_patients', 'mean']
 
@@ -70,20 +60,38 @@ function extractSeries(raw) {
 
 export function normalizeRun(raw) {
   if (!raw || typeof raw !== 'object') return null
-  const history = extractSeries(firstDefined(raw, HISTORY_KEYS))
-  const predictions = extractSeries(firstDefined(raw, PREDICTION_KEYS))
-  const createdAt = firstDefined(raw, ['created_at', 'created', 'timestamp', 'run_date'])
+
+  const isGetResponse = raw && typeof raw === 'object' && 'success' in raw && 'run' in raw && 'points' in raw
+  const isPostResponse = raw && typeof raw === 'object' && 'success' in raw && 'forecast' in raw
+
+  let history = []
+  let predictions = []
+  let runMeta = raw
+
+  if (isGetResponse) {
+    runMeta = raw.run || {}
+    predictions = extractSeries(raw.points)
+    history = extractSeries(raw.history)
+  } else if (isPostResponse) {
+    runMeta = raw
+    predictions = extractSeries(raw.forecast)
+  } else if (raw.history || raw.predictions) {
+    history = extractSeries(raw.history)
+    predictions = extractSeries(raw.predictions)
+  }
+
+  const createdAt = firstDefined(runMeta, ['created_at', 'created', 'timestamp', 'run_date'])
   const run = {
-    id: String(firstDefined(raw, ['id', 'run_id', 'pk', 'uuid']) ?? ''),
+    id: String(firstDefined(runMeta, ['id', 'run_id', 'pk', 'uuid']) ?? ''),
     createdAt: createdAt ? String(createdAt) : null,
-    status: String(firstDefined(raw, ['status', 'state']) ?? 'completed'),
-    model: String(firstDefined(raw, ['model', 'model_name', 'model_type']) ?? 'ThetaModel'),
-    period: Number(firstDefined(raw, ['period', 'season_period', 'seasonality']) ?? 7),
-    horizon: Number(firstDefined(raw, ['horizon', 'forecast_horizon', 'forecast_days', 'days']) ?? 90),
-    historyStart: firstDefined(raw, ['history_start', 'history_start_date', 'observed_start']),
-    historyEnd: firstDefined(raw, ['history_end', 'history_end_date', 'observed_end']),
-    forecastStart: firstDefined(raw, ['forecast_start', 'forecast_start_date', 'start_date']),
-    forecastEnd: firstDefined(raw, ['forecast_end', 'forecast_end_date', 'end_date']),
+    status: String(firstDefined(runMeta, ['status', 'state']) ?? 'completed'),
+    model: String(firstDefined(runMeta, ['model', 'model_name', 'model_type']) ?? 'ThetaModel'),
+    period: Number(firstDefined(runMeta, ['period', 'season_period', 'seasonality']) ?? 7),
+    horizon: Number(firstDefined(runMeta, ['horizon', 'forecast_horizon', 'forecast_days', 'days']) ?? 90),
+    historyStart: firstDefined(runMeta, ['history_start', 'history_start_date', 'observed_start']),
+    historyEnd: firstDefined(runMeta, ['history_end', 'history_end_date', 'observed_end']),
+    forecastStart: firstDefined(runMeta, ['forecast_start', 'forecast_start_date', 'start_date']),
+    forecastEnd: firstDefined(runMeta, ['forecast_end', 'forecast_end_date', 'end_date']),
     history,
     predictions,
   }
@@ -97,11 +105,16 @@ export function normalizeRun(raw) {
 
 export function normalizeRunList(raw) {
   let items
-  if (Array.isArray(raw)) items = raw
-  else if (raw && typeof raw === 'object') {
-    const key = pickKey(raw, RUN_LIST_KEYS)
-    items = key ? raw[key] : null
-    if (!Array.isArray(items)) items = raw.values ? raw.values : null
+  if (Array.isArray(raw)) {
+    items = raw
+  } else if (raw && typeof raw === 'object') {
+    if ('success' in raw && 'run' in raw) {
+      items = [raw.run]
+    } else {
+      const key = pickKey(raw, RUN_LIST_KEYS)
+      items = key ? raw[key] : null
+      if (!Array.isArray(items)) items = raw.values ? raw.values : null
+    }
   }
   if (!Array.isArray(items)) return []
   const runs = items.map(normalizeRun).filter(Boolean)

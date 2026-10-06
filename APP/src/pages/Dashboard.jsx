@@ -12,7 +12,7 @@ import DemandChart from '../components/charts/DemandChart.jsx'
 import { useAuth } from '../hooks/useAuth.js'
 import { useSettings } from '../hooks/useSettings.js'
 import { useData } from '../hooks/useData.js'
-import { getRun, listRuns } from '../services/dataService.js'
+import { getRun, listObservations, listRuns } from '../services/dataService.js'
 import { averageOf, findPeak, normalizeRun, normalizeRunList, sumRange } from '../utils/forecast.js'
 import { evaluateAlerts } from '../utils/alerts.js'
 import { addDays, fmtDate, fmtDateShort, fmtInt, fmtWeekday, timeAgo } from '../utils/format.js'
@@ -32,8 +32,19 @@ export default function Dashboard() {
   const { data: run, loading: runLoading, error: runError, reload: reloadRun } = useData(
     async (signal) => {
       if (!latestId) return null
-      const raw = await getRun(latestId, { demoMode: settings.demo, token, signal })
-      return normalizeRun(raw)
+      const [runRaw, observations] = await Promise.all([
+        getRun(latestId, { demoMode: settings.demo, token, signal }),
+        listObservations({ demoMode: settings.demo, token, signal }),
+      ])
+      const normalized = normalizeRun(runRaw)
+      if (normalized) {
+        normalized.history = observations
+        if (observations.length) {
+          normalized.historyStart = normalized.historyStart || observations[0].date
+          normalized.historyEnd = normalized.historyEnd || observations[observations.length - 1].date
+        }
+      }
+      return normalized
     },
     `run:${latestId ?? 'none'}:${source}`,
   )
