@@ -1,5 +1,7 @@
 /** Flat Carbon tooltip shared by all AfyaFlow charts. */
-export default function ChartTip({ active, payload, label, valueSuffix = ' patients', formatter }) {
+export default function ChartTip(
+
+      { active, payload, label, valueSuffix = ' patients', formatter }) {
   if (!active || !payload?.length) return null
   const rows = payload.filter((entry) => entry.value !== null && entry.value !== undefined)
   if (!rows.length) return null
