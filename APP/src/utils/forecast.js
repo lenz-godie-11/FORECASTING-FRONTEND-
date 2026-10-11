@@ -70,14 +70,20 @@ export function normalizeRun(raw) {
 
   if (isGetResponse) {
     runMeta = raw.run || {}
-    predictions = extractSeries(raw.points)
-    history = extractSeries(raw.history)
+    predictions = extractSeries(raw.points) || extractSeries(runMeta.points) || extractSeries(runMeta.predictions)
+    const h1 = extractSeries(raw.history)
+    const h2 = extractSeries(runMeta.history)
+    history = h1.length ? h1 : (h2.length ? h2 : [])
   } else if (isPostResponse) {
     runMeta = raw
-    predictions = extractSeries(raw.forecast)
-  } else if (raw.history || raw.predictions) {
-    history = extractSeries(raw.history)
-    predictions = extractSeries(raw.predictions)
+    predictions = extractSeries(raw.forecast) || extractSeries(raw.predictions) || extractSeries(raw.points)
+    const h1 = extractSeries(raw.history)
+    const h2 = extractSeries(runMeta.history)
+    history = h1.length ? h1 : (h2.length ? h2 : [])
+  } else if (raw.history || raw.predictions || raw.points) {
+    const h1 = extractSeries(raw.history)
+    history = h1.length ? h1 : []
+    predictions = extractSeries(raw.predictions) || extractSeries(raw.points) || extractSeries(raw.forecast)
   }
 
   const createdAt = firstDefined(runMeta, ['created_at', 'created', 'timestamp', 'run_date'])
@@ -108,7 +114,12 @@ export function normalizeRunList(raw) {
   if (Array.isArray(raw)) {
     items = raw
   } else if (raw && typeof raw === 'object') {
-    if ('success' in raw && 'run' in raw) {
+    // GET /api/v1/forecast/ returns { success, run, points } — a single
+    // run envelope with its 90-day prediction points. Pass the whole
+    // envelope to normalizeRun so the points are preserved as predictions.
+    if ('success' in raw && 'run' in raw && 'points' in raw) {
+      items = [raw]
+    } else if ('success' in raw && 'run' in raw) {
       items = [raw.run]
     } else {
       const key = pickKey(raw, RUN_LIST_KEYS)
